@@ -1,1 +1,0 @@
-# Metode-Peramalan-Deret-Waktu
