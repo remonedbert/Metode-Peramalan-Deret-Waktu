@@ -1,5 +1,0 @@
----
-title: "Tugas Kelompok 1"
-output: html_document
----
-
