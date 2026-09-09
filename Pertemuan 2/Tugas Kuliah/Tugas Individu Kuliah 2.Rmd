@@ -1,0 +1,273 @@
+---
+title: "Tugas Individu Kuliah MPDW"
+author: "Raymond Edbert"
+date: "2026-08-31"
+output: rmdformats::downcute
+---
+# Library
+
+```{r}
+library(readxl)
+library(dplyr)
+library(ggplot2)
+library(psych)
+library(GGally)
+library(corrplot)
+library(TTR)
+library(forecast)
+library(lmtest)
+```
+
+# Data Yang Digunakan
+
+```{r}
+IPMAceh <- read_excel("C:\\Users\\bagan\\Downloads\\Book1.xlsx")
+IPMAceh
+```
+
+# Persamaan Model Linear
+
+```{r}
+model <- lm(IPM ~ Tahun, data = IPMAceh)
+
+summary(model)
+```
+
+$$
+\hat{Y}_t = \hat{\beta}_0 + \hat{\beta}_1 X_t
+$$
+
+$$
+\widehat{IPM}_t = -954.36744 + 0.50811\,Tahun_t
+$$ Artinya setiap tahun berthambah sebanyak 0.50811 Satuan
+
+# Diagnostik
+
+```{r}
+sisaan <- residuals(model)
+fitValue <- predict(model)
+
+par(mfrow = c(2, 2))
+
+# Plot 1: QQ Plot (Mengecek asumsi normalitas)
+qqnorm(sisaan, main = "Normal Q-Q Plot")
+qqline(sisaan, col = "steelblue", lwd = 2)
+
+# Plot 2: Histogram (Mengecek asumsi normalitas)
+hist(sisaan, col = "steelblue", main = "Histogram Sisaan", xlab = "Sisaan")
+
+# Plot 3: Sisaan vs Fitted Values (Mengecek asumsi homoskedastisitas)
+plot(fitValue, sisaan, 
+     col = "steelblue", 
+     pch = 20, 
+     xlab = "Fitted Values (Prediksi)", 
+     ylab = "Sisaan (Residuals)", 
+     main = "Sisaan vs Fitted Values")
+abline(h = 0, col = "red", lwd = 2, lty = 2)
+
+# Plot 4: Sisaan vs Order (Mengecek asumsi autokorelasi)
+plot(seq_along(sisaan), sisaan, 
+     col = "steelblue", 
+     pch = 20, 
+     xlab = "Order (Urutan Waktu)", 
+     ylab = "Sisaan (Residuals)", 
+     main = "Sisaan vs Order")
+lines(seq_along(sisaan), sisaan, col = "red")
+abline(h = 0, lwd = 2, lty = 2)
+
+par(mfrow = c(1, 1))
+```
+
+# Normalitas Sisaan
+
+```{r}
+shapiro.test(sisaan)
+ks.test(sisaan, "pnorm", mean=mean(sisaan), sd=sd(sisaan))
+```
+
+H0: sisaan mengikuti sebaran normal \
+H1: sisaan tidak mengikuti sebaran normal \
+Berdasarkan uji formal, kedua uji normalitas menunjukkan hasil yang konsisten. Uji Shapiro-Wilk menghasilkan p-value = 0.9349 (\> 0.05), sehingga gagal tolak H0. Sejalan dengan hal tersebut, uji Kolmogorov-Smirnov juga menghasilkan p-value = 0.846 (\> 0.05), yang berarti gagal tolak H0. Dengan demikian, dapat disimpulkan bahwa sisaan (residuals) dari model telah memenuhi asumsi dan menyebar normal.
+
+## AUTOKORELASI
+```{r}
+dwtest(model)
+```
+Berdasarkan uji durbin watson benar adanya autokorelasi, karena p-value \< 0.05
+
+# Penanganan autokorelasi dengan Cochran Orcutt
+
+
+
+
+```{r}
+cochrane_orcutt <- function(model, max_iter = 100, tol = 1e-6) {
+  
+  # Data dan residual awal
+  y <- model.response(model.frame(model))
+  X <- model.matrix(model)
+  
+  e <- residuals(model)
+  
+  # Estimasi rho awal
+  rho <- sum(e[-1] * e[-length(e)]) /
+         sum(e[-length(e)]^2)
+  
+  for (i in 1:max_iter) {
+    
+    rho_lama <- rho
+    
+    # Transformasi Cochrane-Orcutt
+    y_trans <- y[-1] - rho * y[-length(y)]
+    X_trans <- X[-1, ] - rho * X[-length(y), ]
+    
+    # Model hasil transformasi
+    model_trans <- lm(y_trans ~ X_trans - 1)
+    
+    # Residual hasil transformasi
+    e_trans <- residuals(model_trans)
+    
+    # Estimasi rho baru menggunakan residual model asli
+    beta <- coef(model_trans)
+    e_asli <- y - X %*% beta
+    
+    rho <- sum(e_asli[-1] * e_asli[-length(e_asli)]) /
+           sum(e_asli[-length(e_asli)]^2)
+    
+    # Cek konvergensi
+    if (abs(rho - rho_lama) < tol) {
+      break
+    }
+  }
+  
+  # Model final
+  y_trans <- y[-1] - rho * y[-length(y)]
+  X_trans <- X[-1, ] - rho * X[-length(y), ]
+  
+  model_final <- lm(y_trans ~ X_trans - 1)
+  
+  list(
+    rho = rho,
+    iterasi = i,
+    model = model_final
+  )
+}
+
+hasil_CO <- cochrane_orcutt(model)
+rho <- hasil_CO$rho
+
+hasil_CO
+```
+Hasil keluaran model setelah dilakukan penanganan adalah sebagai berikut.$$Y = -992.1928 + 0.5268X_1$$Hasil juga menunjukkan bahwa nilai DW dan p-value menjadi [masukkan nilai DW baru] dan [masukkan p-value baru]. Nilai DW sudah berada pada rentang $d_U < DW < 4-d_U$ atau [batas bawah] $< DW <$ [batas atas]. Hal tersebut juga didukung dengan nilai p-value $> 0.05$, artinya belum cukup bukti menyatakan bahwa sisaan terdapat autokorelasi pada taraf nyata 5%. Untuk nilai $\hat{\rho}$ optimum yang digunakan adalah $0.4913008$.
+
+# cek autokorelasi setelah penanganan
+
+```{r}
+dwtest(hasil_CO$model)
+```
+Hasil pengujian Durbin-Watson pada model setelah dilakukan penanganan dengan metode Cochrane-Orcutt menunjukkan nilai DW sebesar 1.299 dan p-value sebesar 0.03965. Karena nilai p-value < 0.05, maka H0 ditolak. Hal ini berarti pada taraf nyata 5%, masih terdapat cukup bukti yang menyatakan bahwa sisaan memiliki autokorelasi (positif). Dengan demikian, penanganan menggunakan metode Cochrane-Orcutt belum berhasil memulihkan asumsi non-autokorelasi pada model.
+
+# Penanganan Autokorelasi Hildreth-Lu
+```{r}
+# Membuat fungsi Hildreth-Lu
+hildreth.lu.func <- function(r, model){
+  x <- model.matrix(model)[,-1]
+  y <- model.response(model.frame(model))
+  n <- length(y)
+  t <- 2:n
+  y <- y[t] - r*y[t-1]
+  x <- x[t] - r*x[t-1]
+  
+  return(lm(y ~ x))
+}
+
+# Pencarian rho yang meminimumkan SSE
+r <- c(seq(0.1, 0.9, by = 0.1))
+tab <- data.frame("rho" = r, "SSE" = sapply(r, function(i){deviance(hildreth.lu.func(i, model))}))
+
+# Menampilkan tabel rho dan SSE dengan 4 angka di belakang koma
+round(tab, 4)
+```
+Pertama-tama akan dicari di mana kira-kira $\rho$ yang menghasilkan SSE minimum. Berdasarkan hasil iterasi di atas, terlihat bahwa nilai SSE menurun dan mencapai titik terendah pada $\rho = 0.5$ dengan nilai SSE sebesar 0.4054, lalu kembali meningkat setelahnya. Oleh karena itu, $\rho$ optimum diperkirakan berada di sekitar 0.5. Namun, hasil tersebut masih kurang teliti sehingga akan dicari kembali $\rho$ yang lebih presisi. Jarak antar $\rho$ yang dicari sebelumnya adalah 0.1, kali ini jarak antar $\rho$ yang digunakan adalah 0.001 dan dilakukan pencarian pada rentang yang lebih sempit, yaitu pada selang 0.4 sampai dengan 0.6
+
+```{r}
+# Rho optimal di sekitar 0.5
+rOpt <- seq(0.4, 0.6, by = 0.001)
+
+# Mencari SSE untuk masing-masing rho pada rentang baru
+tabOpt <- data.frame("rho" = rOpt, "SSE" = sapply(rOpt, function(i){deviance(hildreth.lu.func(i, model))}))
+
+# Menampilkan 6 nilai rho teratas yang menghasilkan SSE paling kecil
+head(tabOpt[order(tabOpt$SSE), ])
+```
+```{r}
+# Mendapatkan nilai rho optimal dan SSE minimum secara otomatis
+rho_optimum <- tabOpt[tabOpt$SSE == min(tabOpt$SSE), "rho"]
+sse_minimum <- min(tabOpt$SSE)
+
+# Grafik SSE optimum
+par(mfrow = c(1,1))
+plot(tab$rho, tab$SSE, type = "l", xlab = "Rho", ylab = "SSE", 
+     main = "Kurva Pencarian Rho Optimum")
+
+# Membuat garis vertikal pada rho optimum
+abline(v = rho_optimum, lty = 2, col = "red", lwd = 2)
+
+# Menambahkan teks secara dinamis (posisi otomatis menyesuaikan)
+text(x = rho_optimum, y = sse_minimum + 0.01, 
+     labels = paste("rho =", rho_optimum), 
+     col = "red", cex = 0.8, pos = 3)
+```
+Perhitungan yang dilakukan aplikasi R menunjukkan bahwa nilai $\rho$ optimum, yaitu saat SSE terkecil, terdapat pada nilai $\rho=0.491$. Hal tersebut juga ditunjukkan pada plot. Selanjutnya, model dapat didapatkan dengan mengevaluasi nilai $\rho$ ke dalam fungsi hildreth.lu.func, serta dilanjutkan dengan pengujian autokorelasi dengan uji Durbin-Watson. Namun, setelah pengecekan tersebut tidak lupa koefisien regresi tersebut digunakan untuk transformasi balik. Persamaan hasil transformasi itulah yang menjadi persamaan sesungguhnya
+
+```{r}
+# Model terbaik menggunakan rho optimum (0.491)
+modelHL <- hildreth.lu.func(rho_optimum, model)
+summary(modelHL)
+
+# Transformasi Balik
+cat("y = ", coef(modelHL)[1]/(1 - rho_optimum), " + ", coef(modelHL)[2], "x", sep = "")
+```
+Setelah dilakukan transformasi balik, didapatkan model dengan metode Hildreth-Lu sebagai berikut.$$y=-992.1603+0.5268283x$$
+
+
+## PEMERIKSAAN ULANG AUTOKORELASI
+```{r}
+dwtest(modelHL)
+```
+"Hasil uji Durbin-Watson pada model setelah transformasi menunjukkan nilai DW sebesar 1.2989 dan p-value sebesar 0.03963. Karena nilai p-value < 0.05, maka H0 ditolak. Hal ini menunjukkan bahwa pada taraf nyata 5%, sudah cukup bukti untuk menyatakan bahwa masih terdapat masalah autokorelasi pada sisaan model tersebut."
+
+# Perbandingan Kedua Metode
+```{r}
+# Perbandingan Nilai SSE dan MSE
+sseModelawal <- anova(model)$`Sum Sq`[-1]
+sseModelCO <- anova(hasil_CO$model)$`Sum Sq`[-1]
+sseModelHL <- anova(modelHL)$`Sum Sq`[-1]
+
+# Mendapatkan jumlah observasi (n) dari model
+n <- length(resid(model))
+
+# Menghitung MSE
+mseModelawal <- sseModelawal / n
+mseModelCO <- sseModelCO / n
+mseModelHL <- sseModelHL / n
+
+# Membuat matriks perbandingan
+akurasi <- matrix(c(sseModelawal, sseModelCO, sseModelHL,
+                    mseModelawal, mseModelCO, mseModelHL), 
+                  nrow = 2, ncol = 3, byrow = TRUE)
+
+# Memberikan penamaan pada kolom dan baris
+colnames(akurasi) <- c("Model Awal", "Model Cochrane-Orcutt", "Model Hildreth-Lu")
+row.names(akurasi) <- c("SSE", "MSE")
+
+# Menampilkan tabel hasil perbandingan
+akurasi
+```
+Berdasarkan hasil perbandingan akurasi pada tabel, penanganan autokorelasi menggunakan metode Cochrane-Orcutt maupun Hildreth-Lu terbukti mampu menurunkan galat model secara signifikan dibandingkan dengan Model Awal. Hal ini terlihat dari penurunan nilai SSE dari 0.5519 menjadi sekitar 0.4053, serta nilai MSE dari 0.0367 menjadi 0.0270.
+
+Jika dibandingkan antara kedua metode penanganan tersebut, keduanya memberikan hasil yang hampir identik. Namun, Model Cochrane-Orcutt menghasilkan nilai SSE yang sangat sedikit lebih kecil (0.40537743) dibandingkan dengan Model Hildreth-Lu (0.40537747). Oleh karena itu, Model Cochrane-Orcutt dapat disimpulkan sebagai model yang relatif paling baik dan akurat di antara ketiga model tersebut karena memiliki tingkat kesalahan (error) yang paling minimum.
+
+
+# Kesimpulan
+Penerapan metode Cochrane-Orcutt dan Hildreth-Lu terbukti mampu meningkatkan akurasi model dengan menurunkan nilai galat (SSE turun dari 0.5519 menjadi 0.4053; MSE turun dari 0.0367 menjadi 0.0270). Kedua metode memberikan hasil akurasi yang nyaris identik. Namun, berdasarkan hasil uji Durbin-Watson, kedua metode tersebut sama-sama belum berhasil mengatasi masalah autokorelasi (p-value < 0.05). Oleh karena itu, model akhir ini belum sepenuhnya valid karena masih melanggar asumsi regresi, sehingga memerlukan metode penanganan lanjutan lainnya.
