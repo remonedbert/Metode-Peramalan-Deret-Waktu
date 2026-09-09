@@ -1,0 +1,368 @@
+---
+title: "Tugas Individu - 3"
+output: 
+  html_document:
+    theme: yeti
+    toc: true
+    toc_float: true
+  word_document: default
+  pdf_document: default
+---
+
+# Input Data
+```{r}
+library(readr)
+library(MLmetrics)
+Udara <- read_csv("C:\\Users\\bagan\\OneDrive\\Kuliah\\MPDW\\Metode-Peramalan-Deret-Waktu\\Pertemuan 3\\NewDelhi_Air_quality.csv")
+
+head(Udara)
+```
+# Menetapkan Variabel
+```{r}
+Y <- Udara$AQI
+X <- Udara$pm25 
+data_model_bersih <- data.frame(Y = Y, X = X)
+```
+# Check Missing Value
+```{r}
+sum(is.na(data_model_bersih$Y))
+sum(is.na(data_model_bersih$X))
+```
+# Splitting Data
+```{r}
+# (80% untuk Train)
+batas <- round(0.8 * nrow(data_model_bersih))
+
+# Memecah data
+data_train <- data_model_bersih[1:batas, ]
+data_test <- data_model_bersih[(batas+1):nrow(data_model_bersih), ]
+
+# Melihat jumlah data latih dan uji
+cat("Jumlah Data Latih:", nrow(data_train), "\n")
+cat("Jumlah Data Uji:", nrow(data_test), "\n")
+```
+
+# 1. Model Koyck
+
+## Library
+```{r}
+library(dLagM)
+```
+## Model Koyck
+```{r}
+model_koyck <- koyckDlm(x = data_train$X, y = data_train$Y)
+
+summary(model_koyck)
+```
+
+**Interpretasi**:Jika P-value dari peubah $Y_{t-1}$ dan $X_t < 0.05$, maka kedua peubah tersebut berpengaruh signifikan terhadap $Y_t$. Peubah $Y_{t-1}$ memiliki koefisien sebesar 0.8897, sehingga peningkatan $Y_{t-1}$ sebesar satu satuan akan meningkatkan $Y_t$ sebesar 0.8897 satuan, dengan asumsi $X_t$ konstan. Sementara itu, $X_t$ memiliki koefisien sebesar -0.5723, sehingga peningkatan $X_t$ sebesar satu satuan akan menurunkan $Y_t$ sebesar 0.5723 satuan, dengan asumsi $Y_{t-1}$ konstan. Koefisien $Y_{t-1}$ sebesar 0.8897 menunjukkan tingkat persistensi/pengaruh nilai masa lalu terhadap nilai saat ini.
+
+Persamaan:
+$$
+\hat{Y}_t = 4.0771 - 0.5723X_t + 0.8897Y_{t-1}
+$$
+## Peramalan
+```{r}
+# Meramalkan 5 periode ke depan
+fore.koyck <- forecast(model = model_koyck, x = data_test$X, h = nrow(data_test))
+fore.koyck
+
+# Cek Akurasi (MAPE) pada data testing
+mape_koyck <- MLmetrics::MAPE(data_test$Y, fore.koyck$forecasts)
+
+cat("MAPE Model Koyck:", mape_koyck, "\n")
+```
+
+
+
+
+# 2. Model Distribusi Lag
+
+## Pemodelan (Lag = 2)
+```{r}
+model.dlm <- dlm(
+  x = data_train$X,
+  y = data_train$Y,
+  q = 2
+)
+
+summary(model.dlm)
+```
+## Penentuan Lag Optimum
+```{r}
+# tempat untuk menyimpan nilai AIC
+aic_dlm <- numeric(10)
+
+# cari nilai AIC untuk lag 1 sampai 10
+for (i in 1:10) {
+  model_sementara <- dlm(
+    x = data_train$X,
+    y = data_train$Y,
+    q = i
+  )
+  
+  aic_dlm[i] <- AIC(model_sementara$model)
+}
+
+# Menampilkan AIC setiap lag
+aic_dlm
+```
+## Penentuan Lag dari AIC terkecil
+```{r}
+# Menentukan lag dengan AIC terkecil
+lag_opt_dlm <- which.min(aic_dlm)
+
+print(
+  paste(
+    "Lag optimum untuk model DLM adalah:",
+    lag_opt_dlm
+  )
+)
+```
+## Pemodelan
+```{r}
+model_dlm_final <- dlm(
+  x = data_train$X,
+  y = data_train$Y,
+  q = lag_opt_dlm
+)
+
+summary(model_dlm_final)
+```
+**Interpretasi**:Berdasarkan hasil pemodelan DLM dengan lag optimum \(q=10\), diperoleh nilai \(R^2=0,6391\), yang berarti model mampu menjelaskan 63,91% variasi Y. Secara simultan, model signifikan dengan p-value uji F sebesar 2,646 × 10⁻⁵ < 0,05.
+
+Secara parsial, \(X_t\), \(X_{t-7}\), dan \(X_{t-10}\) berpengaruh signifikan terhadap \(Y_t\), dengan masing-masing koefisien -15,772, -16,886, dan -4,613. Sementara itu, lag lainnya tidak berpengaruh signifikan pada taraf 5%. Model memiliki AIC sebesar 186,2653.
+
+## Peramalan
+```{r}
+# Peramalan model DLM
+fore.dlm <- forecast(
+  model = model_dlm_final,
+  x = data_test$X,
+  h = nrow(data_test)
+)
+
+fore.dlm
+
+# Menghitung MAPE
+mape.dlm <- MLmetrics::MAPE(
+  fore.dlm$forecasts,
+  data_test$Y
+)
+
+cat("MAPE Model DLM:", mape.dlm, "\n")
+```
+
+
+
+# 3. Model Autoregressive Distributed Lag (ARDL)
+## Pemodelan
+```{r}
+# Model ARDL dengan lag X = 1 dan lag Y = 1
+model.ardl <- ardlDlm(
+  formula = Y ~ X,
+  data = data_train,
+  p = 1,
+  q = 1
+)
+
+summary(model.ardl)
+```
+**Interpretasi**:Berdasarkan hasil pemodelan ARDL dengan \(p=1\) dan \(q=1\), diperoleh nilai \(R^2=0,8273\), yang berarti model mampu menjelaskan 82,73% variasi Y. Variabel \(Y_{t-1}\) berpengaruh positif dan signifikan terhadap \(Y_t\) dengan koefisien 0,89112 dan p-value < 0,05. Sementara itu, \(X_t\) dan \(X_{t-1}\) tidak berpengaruh signifikan terhadap \(Y_t\) karena memiliki p-value > 0,05.
+
+## Lag Optimum ARDL
+```{r}
+# Mencari kombinasi lag optimum ARDL
+model.ardl.opt <- ardlBoundOrders(
+  data = data.frame(data_train),
+  ic = "AIC",
+  formula = Y ~ X
+)
+
+# Menentukan kombinasi lag dengan AIC terkecil
+min_p <- c()
+
+for (i in 1:6) {
+  min_p[i] <- min(model.ardl.opt$Stat.table[[i]])
+}
+
+q_opt <- which(
+  min_p == min(min_p, na.rm = TRUE)
+)
+
+p_opt <- which(
+  model.ardl.opt$Stat.table[[q_opt]] ==
+    min(model.ardl.opt$Stat.table[[q_opt]], na.rm = TRUE)
+)
+
+data.frame(
+  "Lag_Y_opt(q)" = q_opt,
+  "Lag_X_opt(p)" = p_opt,
+  "AIC" = model.ardl.opt$min.Stat
+)
+```
+## Pemodelan dengan Lag Optimum
+```{r}
+# Membentuk model ARDL dengan lag optimum
+model_ardl_final <- ardlDlm(
+  formula = Y ~ X,
+  data = data_train,
+  p = p_opt,
+  q = q_opt
+)
+
+summary(model_ardl_final)
+```
+**Interpretasi**:Berdasarkan hasil pemodelan ARDL dengan lag optimum, diperoleh nilai \(R^2=0,9557\), yang berarti model mampu menjelaskan 95,57% variasi Y. Secara simultan, model signifikan dengan p-value uji F < 2,2 × 10⁻¹⁶ < 0,05.
+
+Secara parsial, \(X_t\), \(X_{t-7}\), \(X_{t-10}\), dan \(Y_{t-1}\) berpengaruh signifikan terhadap \(Y_t\). Koefisiennya masing-masing sebesar -7,0126, -6,3338, -2,0485, dan 0,6735. Sementara itu, lag lainnya tidak berpengaruh signifikan pada taraf 5%.
+## Peramalan dengan Lag Optimum
+```{r}
+# Peramalan ARDL dengan lag optimum
+fore.ardl <- forecast(
+  model = model_ardl_final,
+  x = data_test$X,
+  h = nrow(data_test)
+)
+
+fore.ardl
+
+# Menghitung MAPE
+mape.ardl <- MLmetrics::MAPE(
+  fore.ardl$forecasts,
+  data_test$Y
+)
+
+cat("MAPE Model ARDL Optimum:", mape.ardl, "\n")
+```
+
+
+# Evaluasi Asumsi Model
+## Library
+```{r}
+library(lmtest)
+library(Metrics)
+library(ggplot2)
+```
+## Uji Asumsi Model
+### Model Koyck
+```{r}
+# 1. Uji Normalitas
+shapiro.test(residuals(model_koyck$model))
+
+# 2. Uji Autokorelasi 
+bgtest(model_koyck$model)
+
+# 3. Uji Homoskedastisitas
+bptest(model_koyck$model)
+```
+
+### Model Distribusi Lag
+```{r}
+# 1. Uji Normalitas
+shapiro.test(residuals(model_dlm_final$model))
+
+# 2. Uji Autokorelasi
+bgtest(model_dlm_final$model)
+
+# 3. Uji Homoskedastisitas
+bptest(model_dlm_final$model)
+```
+
+
+### Model Autoregressive Distributed Lag (ARDL)
+```{r}
+# 1. Uji Normalitas
+shapiro.test(residuals(model_ardl_final$model))
+
+# 2. Uji Autokorelasi 
+bgtest(model_ardl_final$model)
+
+# 3. Uji Homoskedastisitas 
+bptest(model_ardl_final$model)
+```
+
+# Perbandingan Performa Model
+## Akurasi
+```{r}
+# Ringkasan Akurasi
+akurasi <- matrix(
+  c(
+    mape_koyck,
+    mape.dlm,
+    mape.ardl
+  )
+)
+
+row.names(akurasi) <- c(
+  "Koyck",
+  "DLM Optimum",
+  "ARDL (1,1)"
+)
+
+colnames(akurasi) <- c("MAPE")
+
+print(akurasi)
+```
+
+## Visualisasi
+```{r}
+par(mfrow = c(1,1))
+
+# Sumbu X = urutan waktu data testing
+waktu <- 1:nrow(data_test)
+
+plot(
+  waktu,
+  data_test$Y,
+  type = "b",
+  col = "black",
+  lwd = 2,
+  pch = 1,
+  ylab = "Nilai Y",
+  xlab = "Indeks Waktu (Data Uji)",
+  main = "Perbandingan Model Peramalan"
+)
+
+lines(
+  waktu,
+  fore.koyck$forecasts,
+  col = "red",
+  type = "b",
+  pch = 16
+)
+
+lines(
+  waktu,
+  fore.dlm$forecasts,
+  col = "blue",
+  type = "b",
+  pch = 17
+)
+
+lines(
+  waktu,
+  fore.ardl$forecasts,
+  col = "green",
+  type = "b",
+  pch = 18
+)
+
+legend(
+  "topleft",
+  legend = c(
+    "Aktual",
+    "Koyck",
+    "DLM Optimum",
+    "ARDL Optimum"
+  ),
+  col = c("black", "red", "blue", "green"),
+  lty = 1,
+  pch = c(1, 16, 17, 18),
+  cex = 0.8,
+  inset = 0.02
+)
+```
+**Interpretasi**:Berdasarkan grafik perbandingan hasil peramalan, DLM Optimum dan ARDL Optimum terlihat lebih mampu mengikuti pola perubahan data aktual dibandingkan model Koyck. Namun, berdasarkan nilai MAPE, model Koyck memiliki akurasi terbaik dengan MAPE sekitar 10,55%, sedangkan DLM Optimum sekitar 14,09% dan ARDL Optimum sekitar 14,37%.
+
+Dengan demikian, meskipun secara visual DLM dan ARDL lebih mengikuti pola aktual, model Koyck merupakan model dengan akurasi peramalan terbaik berdasarkan nilai MAPE terkecil.
