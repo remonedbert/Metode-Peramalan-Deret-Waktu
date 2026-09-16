@@ -1,0 +1,510 @@
+---
+title: "Tugas_Praktikum4"
+output: rmdformats::readthedown
+---
+
+# Nomor 1 ( Proses MA(2) )
+
+## Pembangkitan Data 
+### ( Manual )
+```{r}
+set.seed(123)
+
+n1 <- 300
+theta1 <- 0.4
+theta2 <- 0.6
+
+epsilon <- rnorm(n1 + 2, mean = 0, sd = 1)
+
+Y_manual1 <- numeric(n1)
+
+for (t in 1:n1) {
+  Y_manual1[t] <- epsilon[t + 2] +
+    theta1 * epsilon[t + 1] +
+    theta2 * epsilon[t]
+}
+
+Y_manual1 <- ts(Y_manual1)
+
+Y_manual1
+```
+
+#### Plot Time Series
+```{r}
+plot(Y_manual1,
+     main = "Time Series MA(2) - Manual",
+     ylab = "Yt",
+     xlab = "Waktu")
+```
+### arima.sim
+```{r}
+set.seed(123)
+
+Y_arima1 <- arima.sim(
+  model = list(ma = c(0.4, 0.6)),
+  n = 300
+)
+
+Y_arima1 <- ts(Y_arima1)
+
+Y_arima1
+```
+#### Plot time series
+```{r}
+plot(Y_arima1,
+     main = "Time Series MA(2) - arima.sim",
+     ylab = "Yt",
+     xlab = "Waktu")
+```
+
+## Apakah data stasioner?
+Berdasarkan plot time series, terlihat bahwa data MA(1) yang dibangkitkan stasioner dalam rataan
+
+## Plot ACF
+```{r}
+acf(Y_arima1,
+    main = "ACF MA(2)")
+```
+## Plot PACF
+```{r}
+pacf(Y_arima1,
+     main = "PACF MA(2)")
+
+```
+## Plot EACF
+```{r}
+library(TSA)
+eacf(as.numeric(Y_arima1))
+```
+
+
+## Scatter Plot
+### Yt vs Yt−1
+```{r}
+Y <- as.numeric(Y_arima1)
+
+plot(
+  Y[-1],
+  Y[-length(Y)],
+  main = expression(Y[t]~vs~Y[t-1]),
+  xlab = expression(Y[t-1]),
+  ylab = expression(Y[t])
+)
+
+abline(lm(Y[-1] ~ Y[-length(Y)]))
+```
+### Yt vs Yt−2
+```{r}
+plot(
+  Y[-c(1,2)],
+  Y[-c(length(Y)-1, length(Y))],
+  main = expression(Y[t]~vs~Y[t-2]),
+  xlab = expression(Y[t-2]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(Y[-c(1,2)] ~ Y[-c(length(Y)-1, length(Y))])
+)
+```
+###  Yt vs Yt−3
+```{r}
+plot(
+  Y[-c(1,2,3)],
+  Y[-c(length(Y)-2, length(Y)-1, length(Y))],
+  main = expression(Y[t]~vs~Y[t-3]),
+  xlab = expression(Y[t-3]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(Y[-c(1,2,3)] ~ Y[-c(length(Y)-2, length(Y)-1, length(Y))])
+)
+```
+## Cek Autokorelasi
+
+```{r}
+# Autokorelasi empiris
+cor_lag1 <- cor(
+  Y_arima1[-1],
+  Y_arima1[-length(Y_arima1)]
+)
+
+cor_lag2 <- cor(
+  Y_arima1[-c(1,2)],
+  Y_arima1[-c(length(Y_arima1)-1, length(Y_arima1))]
+)
+
+cor_lag3 <- cor(
+  Y_arima1[-c(1,2,3)],
+  Y_arima1[-c(length(Y_arima1)-2,
+             length(Y_arima1)-1,
+             length(Y_arima1))]
+)
+
+# Autokorelasi teoritis
+teoritis <- ARMAacf(
+  ma = c(0.4, 0.6),
+  lag.max = 3
+)
+
+hasil_acf <- data.frame(
+  Lag = 1:3,
+  Empiris = c(cor_lag1, cor_lag2, cor_lag3),
+  Teoritis = teoritis[2:4]
+)
+
+hasil_acf
+```
+MA(2) memiliki autokorelasi pada lag 1 dan lag 2, dengan nilai empiris masing-masing sebesar 0,3936 dan 0,3021. Sementara itu, pada lag 3 nilai autokorelasi empiris sebesar −0,0589, yang relatif dekat dengan nol.
+
+# Nomor 2 ( Proses AR (2) )
+
+## Pembangkitan Data
+### Manual
+```{r}
+set.seed(123)
+
+n2 <- 300
+phi1 <- 0.5
+phi2 <- 0.2
+
+# Bangkitkan error
+epsilon <- rnorm(n2)
+
+# Inisialisasi
+Y_manual2 <- numeric(n2)
+
+Y_manual2[1] <- epsilon[1]
+Y_manual2[2] <- phi1 * Y_manual2[1] + epsilon[2]
+
+# Membentuk AR(2)
+for (t in 3:n2) {
+  Y_manual2[t] <- phi1 * Y_manual2[t-1] +
+    phi2 * Y_manual2[t-2] +
+    epsilon[t]
+}
+
+Y_manual2 <- ts(Y_manual2)
+
+Y_manual2
+```
+#### Plot time series
+```{r}
+plot(Y_manual2,
+     main = "Time Series AR(2) - Manual",
+     ylab = "Yt",
+     xlab = "Waktu")
+```
+### arima.sim
+```{r}
+set.seed(123)
+
+Y_arima2 <- arima.sim(
+  model = list(ar = c(0.5, 0.2)),
+  n = 300
+)
+
+Y_arima2 <- ts(Y_arima2)
+
+Y_arima2
+```
+#### Plot time series
+```{r}
+plot(Y_arima2,
+     main = "Time Series AR(2) - arima.sim",
+     ylab = "Yt",
+     xlab = "Waktu")
+```
+
+## Apakah data stasioner?
+Berdasarkan plot time series, terlihat bahwa data AR(2) yang dibangkitkan stasioner dalam rataan
+## Plot ACF
+```{r}
+acf(Y_arima2,
+    main = "ACF AR(2)")
+
+```
+## Plot PACF
+```{r}
+pacf(Y_arima2,
+     main = "PACF AR(2)")
+```
+## Plot EACF
+```{r}
+eacf(Y_arima2)
+```
+
+## Scatter Plot
+### Yt vs Yt−1
+```{r}
+Y <- as.numeric(Y_arima2)
+
+plot(
+  Y[-1],
+  Y[-length(Y)],
+  main = expression(Y[t]~vs~Y[t-1]),
+  xlab = expression(Y[t-1]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(Y[-1] ~ Y[-length(Y)])
+)
+```
+
+### Yt vs Yt−2
+```{r}
+plot(
+  Y[-c(1,2)],
+  Y[-c(length(Y)-1, length(Y))],
+  main = expression(Y[t]~vs~Y[t-2]),
+  xlab = expression(Y[t-2]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(Y[-c(1,2)] ~ Y[-c(length(Y)-1, length(Y))])
+)
+```
+
+### Yt vs Yt−3
+```{r}
+plot(
+  Y[-c(1,2,3)],
+  Y[-c(length(Y)-2,
+       length(Y)-1,
+       length(Y))],
+  main = expression(Y[t]~vs~Y[t-3]),
+  xlab = expression(Y[t-3]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(Y[-c(1,2,3)] ~
+       Y[-c(length(Y)-2,
+            length(Y)-1,
+            length(Y))])
+)
+```
+
+## Cek Autokorelasi
+```{r}
+# Autokorelasi empiris 
+cor_lag1 <- cor(
+  Y_arima2[-1],
+  Y_arima2[-length(Y_arima2)]
+)
+cor_lag2 <- cor(
+  Y_arima2[-c(1,2)],
+  Y_arima2[-c(length(Y_arima2)-1, length(Y_arima2))]
+)
+
+cor_lag3 <- cor(
+  Y_arima2[-c(1,2,3)],
+  Y_arima2[-c(length(Y_arima2)-2,
+             length(Y_arima2)-1,
+             length(Y_arima2))]
+)
+
+# Autokorelasi teoritis AR(2)
+teoritis <- ARMAacf(
+  ar = c(0.5, 0.2),
+  lag.max = 3
+)
+
+# Tabel perbandingan
+hasil_acf <- data.frame(
+  Lag = 1:3,
+  Empiris = c(cor_lag1, cor_lag2, cor_lag3),
+  Teoritis = teoritis[2:4]
+)
+
+hasil_acf
+```
+AR(2) memiliki autokorelasi positif pada lag 1, lag 2, dan lag 3, dengan nilai empiris masing-masing sebesar 0,5448, 0,3868, dan 0,2464.
+
+# Nomor 3 ( Proses ARMA(2,2) )
+## Pembangkitan Data
+### Manual
+```{r}
+set.seed(123)
+
+n <- 300
+
+phi1 <- 0.5
+phi2 <- 0.2
+
+theta1 <- 0.4
+theta2 <- 0.6
+
+epsilon <- rnorm(n)
+
+Y_manual3 <- numeric(n)
+
+Y_manual3[1] <- epsilon[1]
+
+Y_manual3[2] <-
+  phi1 * Y_manual3[1] +
+  epsilon[2]
+
+for (t in 3:n) {
+  Y_manual3[t] <-
+    phi1 * Y_manual3[t-1] +
+    phi2 * Y_manual3[t-2] +
+    epsilon[t] +
+    theta1 * epsilon[t-1] +
+    theta2 * epsilon[t-2]
+}
+
+Y_manual3 <- ts(Y_manual3)
+
+Y_manual3
+```
+### Plot Time Series
+```{r}
+
+plot(Y_manual3,
+     main = "ARMA(2,2) Manual",
+     ylab = "Yt",
+     xlab = "Waktu")
+```
+
+### Arima.sim
+```{r}
+set.seed(123)
+
+Y_arima3 <- arima.sim(
+  model = list(
+    ar = c(phi1, phi2),
+    ma = c(theta1, theta2)
+  ),
+  n = 300
+)
+
+Y_arima3 <- ts(Y_arima3)
+Y_arima3
+```
+#### Plot time series
+```{r}
+plot(Y_arima3,
+     main = "ARMA(2,2) arima.sim",
+     ylab = "Yt",
+     xlab = "Waktu")
+
+```
+## Apakah data stasioner?
+Berdasarkan plot time series, terlihat bahwa data ARMA(2,2) yang dibangkitkan stasioner dalam rataan
+
+## Plot ACF
+```{r}
+acf(Y_arima3,
+    main = "ACF Arima")
+```
+## Plot PACF
+```{r}
+pacf(Y_arima3,
+     main = "PACF Arima")
+
+```
+
+## Plot EACF
+```{r}
+eacf(Y_arima3)
+
+```
+
+## Scatter Plot
+### Yt vs Yt−1
+```{r}
+Y <- as.numeric(Y_arima3)
+
+plot(
+  Y[-1],
+  Y[-length(Y)],
+  main = expression(Y[t]~vs~Y[t-1]),
+  xlab = expression(Y[t-1]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(Y[-1] ~ Y[-length(Y)])
+)
+```
+
+### Yt vs Yt−2
+```{r}
+plot(
+  Y[-c(1,2)],
+  Y[-c(length(Y)-1, length(Y))],
+  main = expression(Y[t]~vs~Y[t-2]),
+  xlab = expression(Y[t-2]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(
+    Y[-c(1,2)] ~
+      Y[-c(length(Y)-1, length(Y))]
+  )
+)
+```
+
+### Yt vs Yt−3
+```{r}
+plot(
+  Y[-c(1,2,3)],
+  Y[-c(length(Y)-2,
+       length(Y)-1,
+       length(Y))],
+  main = expression(Y[t]~vs~Y[t-3]),
+  xlab = expression(Y[t-3]),
+  ylab = expression(Y[t])
+)
+
+abline(
+  lm(
+    Y[-c(1,2,3)] ~
+      Y[-c(length(Y)-2,
+            length(Y)-1,
+            length(Y))]
+  )
+)
+```
+
+## Cek Autokorelasi
+```{r}
+# Autokorelasi  empiris
+cor_lag1 <- cor(
+  Y_arima3[-1],
+  Y_arima3[-length(Y_arima3)]
+)
+
+cor_lag2 <- cor(
+  Y_arima3[-c(1,2)],
+  Y_arima3[-c(length(Y_arima3)-1, length(Y_arima3))]
+)
+
+cor_lag3 <- cor(
+  Y_arima3[-c(1,2,3)],
+  Y_arima3[-c(length(Y_arima3)-2,
+             length(Y_arima3)-1,
+             length(Y_arima3))]
+)
+
+# Autokorelasi teoritis
+teoritis <- ARMAacf(
+  ar = c(0.5, 0.2),
+  ma = c(0.4, 0.6),
+  lag.max = 3
+)
+hasil_acf3 <- data.frame(
+  Lag = 1:3,
+  Empiris = c(cor_lag1, cor_lag2, cor_lag3),
+  Teoritis = teoritis[2:4]
+)
+
+hasil_acf3
+```
+
+Berdasarkan hasil perhitungan autokorelasi, nilai autokorelasi empiris pada lag 1, 2, dan 3 berturut-turut sebesar 0,8152, 0,6523, dan 0,3963. Nilai tersebut menunjukkan adanya autokorelasi positif pada ketiga lag, dengan kekuatan hubungan yang semakin menurun seiring bertambahnya lag.
